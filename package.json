@@ -1,0 +1,27 @@
+{
+  "name": "proyecto-nd",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fintech del metro cuadrado — Grupo TN, con TN TOUP",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "dev": "pnpm --filter @tn/web dev",
+    "db:migrate": "pnpm --filter @tn/db migrate",
+    "db:seed": "pnpm --filter @tn/db seed",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^22.9.0",
+    "vitest": "^2.1.5"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
+  }
+}

@@ -1,0 +1,323 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CLIENTE
+  STAFF_EMPRESA
+  ADMIN_GRUPO
+}
+
+enum EmpresaCode {
+  TN_SERVICIOS
+  TN_CONSTRUCTORA
+  TN_MATERIALES
+  TN_INMOBILIARIA
+  TN_ADMINISTRACION
+}
+
+enum SubUnidadCode {
+  ARQUITECTURA
+  INGENIERIA
+  MANTENIMIENTO
+  ELECTRICOS
+  SANITARIOS
+  ARIDOS
+  CONSORCIOS
+  VENTA_ALQUILER
+  OBRA
+}
+
+enum LedgerReason {
+  MINT
+  BURN
+  BUY_INTENT
+  TRANSFER
+  RESERVA_PROPIEDAD
+  PAGO_OBRA
+  LIQUIDACION_INTERNA
+  CASHBACK
+}
+
+enum ProjectStatus {
+  COTIZADO
+  RESERVADO
+  EN_EJECUCION
+  FINALIZADO
+  CANCELADO
+}
+
+enum WalletOwnerType {
+  USER
+  EMPRESA
+  SYSTEM_RESERVE
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      Role     @default(CLIENTE)
+  empresaId String?
+  empresa   Empresa? @relation(fields: [empresaId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions      Session[]
+  wallet        Wallet?
+  projects      Project[]
+  conversations Conversation[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Empresa {
+  id          String      @id @default(cuid())
+  code        EmpresaCode @unique
+  razonSocial String
+  tipo        String
+  createdAt   DateTime    @default(now())
+
+  subUnidades SubUnidad[]
+  materiales  Material[]
+  servicios   Servicio[]
+  propiedades Propiedad[]
+  cuadrillas  Cuadrilla[]
+  wallet      Wallet?
+  users       User[]
+  quoteLines  QuoteLine[]
+}
+
+model SubUnidad {
+  id        String        @id @default(cuid())
+  empresaId String
+  empresa   Empresa       @relation(fields: [empresaId], references: [id])
+  code      SubUnidadCode
+  nombre    String
+
+  materiales Material[]
+  servicios  Servicio[]
+
+  @@unique([empresaId, code])
+}
+
+model Material {
+  id            String       @id @default(cuid())
+  empresaId     String
+  empresa       Empresa      @relation(fields: [empresaId], references: [id])
+  subUnidadId   String
+  subUnidad     SubUnidad    @relation(fields: [subUnidadId], references: [id])
+  sku           String
+  nombre        String
+  marca         String?
+  unidad        String
+  precioARS     Decimal      @db.Decimal(14, 2)
+  stock         Decimal      @db.Decimal(14, 2) @default(0)
+  benchmarkARS  Decimal      @db.Decimal(14, 2)
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([empresaId, sku])
+  @@index([subUnidadId])
+}
+
+model Servicio {
+  id              String    @id @default(cuid())
+  empresaId       String
+  empresa         Empresa   @relation(fields: [empresaId], references: [id])
+  subUnidadId     String
+  subUnidad       SubUnidad @relation(fields: [subUnidadId], references: [id])
+  codigo          String
+  nombre          String
+  unidad          String
+  rendimientoM2   Decimal   @db.Decimal(14, 4)
+  precioUnitARS   Decimal   @db.Decimal(14, 2)
+  benchmarkARS    Decimal   @db.Decimal(14, 2)
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([empresaId, codigo])
+}
+
+model Cuadrilla {
+  id          String   @id @default(cuid())
+  empresaId   String
+  empresa     Empresa  @relation(fields: [empresaId], references: [id])
+  nombre      String
+  especialidad String
+  capacidadDia Int     @default(1)
+  activo      Boolean  @default(true)
+}
+
+model Propiedad {
+  id          String   @id @default(cuid())
+  empresaId   String
+  empresa     Empresa  @relation(fields: [empresaId], references: [id])
+  tipo        String
+  modalidad   String
+  m2          Decimal  @db.Decimal(14, 2)
+  ubicacion   String
+  precioARS   Decimal  @db.Decimal(14, 2)
+  precioUSD   Decimal? @db.Decimal(14, 2)
+  descripcion String?
+  disponible  Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TrefilconPriceQuote {
+  id        String   @id @default(cuid())
+  fecha     DateTime @unique
+  precioARS Decimal  @db.Decimal(14, 2)
+  fuente    String
+  notas     String?
+  createdAt DateTime @default(now())
+
+  @@index([fecha])
+}
+
+model PriceIndex {
+  id        String   @id @default(cuid())
+  fecha     DateTime @unique
+  usdARS    Decimal  @db.Decimal(14, 4)
+  fuente    String
+  createdAt DateTime @default(now())
+
+  @@index([fecha])
+}
+
+model Project {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  nombre    String
+  status    ProjectStatus @default(COTIZADO)
+  obraInput Json
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  quotes        Quote[]
+  conversations Conversation[]
+}
+
+model Quote {
+  id            String      @id @default(cuid())
+  projectId     String
+  project       Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version       Int
+  totalARS      Decimal     @db.Decimal(16, 2)
+  totalUSD      Decimal     @db.Decimal(16, 2)
+  totalTOUP     Decimal     @db.Decimal(16, 4)
+  pegTOUP_ARS   Decimal     @db.Decimal(14, 2)
+  usdARS        Decimal     @db.Decimal(14, 4)
+  benchmarkARS  Decimal     @db.Decimal(16, 2)
+  ahorroARS     Decimal     @db.Decimal(16, 2)
+  confianza     Float
+  payload       Json
+  createdAt     DateTime    @default(now())
+
+  lines QuoteLine[]
+
+  @@unique([projectId, version])
+}
+
+model QuoteLine {
+  id                   String       @id @default(cuid())
+  quoteId              String
+  quote                Quote        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  rubro                String
+  subUnidad            SubUnidadCode
+  empresaProveedoraId  String?
+  empresaProveedora    Empresa?     @relation(fields: [empresaProveedoraId], references: [id])
+  esExterno            Boolean      @default(false)
+  descripcion          String
+  unidad               String
+  cantidad             Decimal      @db.Decimal(14, 4)
+  precioUnitarioARS    Decimal      @db.Decimal(14, 2)
+  subtotalARS          Decimal      @db.Decimal(16, 2)
+  benchmarkARS         Decimal      @db.Decimal(16, 2)
+
+  @@index([quoteId])
+}
+
+model Wallet {
+  id          String          @id @default(cuid())
+  ownerType   WalletOwnerType
+  userId      String?         @unique
+  user        User?           @relation(fields: [userId], references: [id])
+  empresaId   String?         @unique
+  empresa     Empresa?        @relation(fields: [empresaId], references: [id])
+  label       String
+  balanceTOUP Decimal         @db.Decimal(18, 6) @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  debitEntries  LedgerEntry[] @relation("DebitWallet")
+  creditEntries LedgerEntry[] @relation("CreditWallet")
+}
+
+model LedgerEntry {
+  id               String       @id @default(cuid())
+  debitWalletId    String
+  debitWallet      Wallet       @relation("DebitWallet", fields: [debitWalletId], references: [id])
+  creditWalletId   String
+  creditWallet     Wallet       @relation("CreditWallet", fields: [creditWalletId], references: [id])
+  amountTOUP       Decimal      @db.Decimal(18, 6)
+  pegSnapshotARS   Decimal      @db.Decimal(14, 2)
+  reason           LedgerReason
+  refType          String?
+  refId            String?
+  pending          Boolean      @default(false)
+  notas            String?
+  createdAt        DateTime     @default(now())
+
+  reserves ToupReserve[]
+
+  @@index([debitWalletId])
+  @@index([creditWalletId])
+  @@index([reason])
+  @@index([createdAt])
+}
+
+model ToupReserve {
+  id              String      @id @default(cuid())
+  rollos          Int
+  precioUnitARS   Decimal     @db.Decimal(14, 2)
+  totalRespaldoARS Decimal    @db.Decimal(16, 2)
+  ledgerEntryId   String?
+  ledgerEntry     LedgerEntry? @relation(fields: [ledgerEntryId], references: [id])
+  notas           String?
+  createdAt       DateTime    @default(now())
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+  createdAt DateTime @default(now())
+
+  messages Message[]
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String       @db.Text
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+}
