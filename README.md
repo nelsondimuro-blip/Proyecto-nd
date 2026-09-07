@@ -35,8 +35,9 @@ tablas de Supabase.
   foto opcional), con estado de entrega (enviado / recibido / leido).
 - **Notas de voz**: se graban desde el navegador y se envian como PTT, igual que en el
   telefono; las recibidas se marcan como tales en el hilo.
-- **Trabajo en equipo**: asignacion de conversaciones, estados (abierta / pendiente / cerrada),
-  contador de no leidos y filtros.
+- **Trabajo en equipo**: invitaciones por correo, roles (propietario / administrador / agente),
+  asignacion de conversaciones, estados (abierta / pendiente / cerrada), contador de no leidos
+  y filtros.
 - **Aislamiento por organizacion** con Row Level Security en todas las tablas.
 
 ## Puesta en marcha
@@ -88,8 +89,9 @@ npm run dev:web       # http://localhost:3000
    *WhatsApp > Ajustes > Dispositivos vinculados > Vincular un dispositivo*.
 4. Al conectar, los mensajes empiezan a caer en **Bandeja**.
 
-Para sumar companieros: que creen su cuenta en la app y luego agregar su `user_id` a la
-tabla `org_members` con el rol correspondiente (`owner`, `admin` o `agent`).
+Para sumar companieros: en **Equipo**, invitarlos por correo. Si ya tienen cuenta entran al
+abrir la app; si no, quedan dentro apenas se registran con ese correo. Los roles se cambian
+desde la misma pantalla.
 
 ## Arquitectura
 
@@ -121,7 +123,7 @@ WhatsApp  <--websocket-->  gateway (Baileys)  --service role-->  Supabase (Postg
 
 | Tabla | Para que |
 | --- | --- |
-| `organizations`, `org_members`, `profiles` | El grupo de negocios y su equipo |
+| `organizations`, `org_members`, `org_invitations`, `profiles` | El grupo de negocios y su equipo |
 | `whatsapp_accounts` | Un numero conectado (estado, QR, telefono) |
 | `whatsapp_auth_state` | Credenciales de Baileys (solo service role) |
 | `contacts` | Directorio unificado de la organizacion |
@@ -159,4 +161,5 @@ Todas las rutas (salvo `/healthz`) exigen la cabecera `x-gateway-secret`.
   se cortan a 5 minutos.
 - El historial previo a la vinculacion no se importa (`syncFullHistory` esta desactivado
   para no saturar la base).
-- La gestion de miembros se hace por ahora desde Supabase, no desde la interfaz.
+- Un usuario pertenece a una sola organizacion: si ya es miembro de una, una invitacion a
+  otra queda pendiente.

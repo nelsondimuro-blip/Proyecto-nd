@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { isAdminRole } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/server'
 import type { Membership, MemberRole } from '@/lib/types'
 
@@ -19,13 +20,25 @@ export async function getMembership(): Promise<{
 
   if (!user) return { supabase, userId: null, email: null, membership: null }
 
-  const { data } = await supabase
-    .from('org_members')
-    .select('org_id, role, organizations(id, name)')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
+  const readMembership = async () =>
+    supabase
+      .from('org_members')
+      .select('org_id, role, organizations(id, name)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+  let { data } = await readMembership()
+
+  // Invitado antes de tener cuenta en el equipo: al entrar, la invitacion
+  // pendiente para su correo lo suma automaticamente.
+  if (!data) {
+    const { data: accepted } = await supabase.rpc('accept_pending_invitations')
+    if (typeof accepted === 'number' && accepted > 0) {
+      data = (await readMembership()).data
+    }
+  }
 
   const membership = data
     ? ({
@@ -55,4 +68,4 @@ export async function requireMembership() {
   }
 }
 
-export const isAdmin = (role: MemberRole) => role === 'owner' || role === 'admin'
+export const isAdmin = isAdminRole
