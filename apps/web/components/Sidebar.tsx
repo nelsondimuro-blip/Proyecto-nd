@@ -6,6 +6,7 @@ import { signOut } from '@/app/login/actions'
 
 const LINKS = [
   { href: '/inbox', icon: '💬', label: 'Bandeja' },
+  { href: '/respuestas', icon: '⚡', label: 'Respuestas rapidas' },
   { href: '/accounts', icon: '📱', label: 'Numeros' },
   { href: '/team', icon: '👥', label: 'Equipo' },
 ]

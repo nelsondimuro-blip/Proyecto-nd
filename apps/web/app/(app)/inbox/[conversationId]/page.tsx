@@ -13,7 +13,7 @@ export default async function ConversationPage({
   params: Promise<{ conversationId: string }>
 }) {
   const { conversationId } = await params
-  const { supabase, membership } = await requireMembership()
+  const { supabase, membership, userId, email } = await requireMembership()
 
   const { data: conversation } = await supabase
     .from('conversations')
@@ -42,6 +42,7 @@ export default async function ConversationPage({
     }
   })
 
+  const agentName = team.find((member) => member.user_id === userId)?.name ?? email ?? 'Agente'
   const account = (conversation as any).whatsapp_accounts
   // La consulta trae los ultimos N mensajes; el hilo se muestra en orden cronologico.
   const ordered = ((messages ?? []) as Message[]).slice().reverse()
@@ -52,6 +53,7 @@ export default async function ConversationPage({
       initialMessages={ordered}
       members={team}
       canSend={account?.status === 'connected'}
+      agentName={agentName}
     />
   )
 }

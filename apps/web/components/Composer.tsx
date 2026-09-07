@@ -1,10 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import QuickReplyPicker from '@/components/QuickReplyPicker'
 import { useVoiceRecorder, type VoiceRecording } from '@/components/useVoiceRecorder'
 import { createClient } from '@/lib/supabase/client'
+import { fillTemplate, searchReplies, type ReplyContext } from '@/lib/quickReplies'
 import { formatDuration } from '@/lib/recorder'
 import { MAX_UPLOAD_BYTES, formatBytes, outboundPath } from '@/lib/uploads'
+import type { QuickReply } from '@/lib/types'
 
 interface PendingAttachment {
   file: File
@@ -16,14 +19,18 @@ export default function Composer({
   conversationId,
   orgId,
   disabled,
+  replyContext,
 }: {
   conversationId: string
   orgId: string
   disabled: boolean
+  replyContext: ReplyContext
 }) {
   const [text, setText] = useState('')
   const [attachment, setAttachment] = useState<PendingAttachment | null>(null)
   const [phase, setPhase] = useState<'idle' | 'uploading' | 'sending'>('idle')
+  const [replies, setReplies] = useState<QuickReply[]>([])
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -38,6 +45,51 @@ export default function Composer({
     if (!preview) return
     return () => URL.revokeObjectURL(preview)
   }, [preview])
+
+  // La biblioteca es chica y se comparte: alcanza con leerla una vez.
+  useEffect(() => {
+    let active = true
+
+    supabase
+      .from('quick_replies')
+      .select('id, org_id, shortcut, title, body, created_by, usage_count')
+      .eq('org_id', orgId)
+      .order('usage_count', { ascending: false })
+      .limit(200)
+      .then(({ data }) => {
+        if (active && data) setReplies(data as QuickReply[])
+      })
+
+    return () => {
+      active = false
+    }
+  }, [orgId, supabase])
+
+  // Escribir "/atajo" al principio del mensaje abre el listado filtrado.
+  const slashQuery = text.startsWith('/') && !text.includes('\n') ? text.slice(1) : null
+  const listOpen = (pickerOpen || slashQuery !== null) && !disabled
+  const visibleReplies = useMemo(
+    () => (listOpen ? searchReplies(replies, slashQuery ?? '') : []),
+    [listOpen, replies, slashQuery],
+  )
+
+  const pickReply = useCallback(
+    (reply: QuickReply) => {
+      setText(fillTemplate(reply.body, replyContext))
+      setPickerOpen(false)
+      textareaRef.current?.focus()
+
+      // El contador ordena el listado; si falla no rompe nada.
+      void supabase.rpc('use_quick_reply', { p_id: reply.id }).then(() => {
+        setReplies((current) =>
+          current.map((item) =>
+            item.id === reply.id ? { ...item, usage_count: item.usage_count + 1 } : item,
+          ),
+        )
+      })
+    },
+    [replyContext, supabase],
+  )
 
   const clearAttachment = () => {
     setAttachment(null)
@@ -133,6 +185,17 @@ export default function Composer({
         </p>
       ) : null}
 
+      {listOpen ? (
+        <QuickReplyPicker
+          replies={visibleReplies}
+          onPick={pickReply}
+          onClose={() => {
+            setPickerOpen(false)
+            if (slashQuery !== null) setText('')
+          }}
+        />
+      ) : null}
+
       {recorder.recording ? (
         <div className="attachment-chip">
           <span className="recording-dot" aria-hidden />
@@ -197,6 +260,20 @@ export default function Composer({
         >
           📎
         </button>
+
+        {replies.length > 0 ? (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            title="Respuestas rapidas (o escribi / )"
+            aria-label="Respuestas rapidas"
+            aria-expanded={listOpen}
+            disabled={disabled || busy || voicePending}
+            onClick={() => setPickerOpen((open) => !open)}
+          >
+            ⚡
+          </button>
+        ) : null}
 
         {recorder.supported ? (
           <button

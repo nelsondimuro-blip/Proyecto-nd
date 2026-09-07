@@ -5,7 +5,7 @@ import Link from 'next/link'
 import Composer from '@/components/Composer'
 import MediaAttachment from '@/components/MediaAttachment'
 import { createClient } from '@/lib/supabase/client'
-import { conversationTitle, formatTime, initials } from '@/lib/format'
+import { conversationTitle, formatTime, initials, phoneFromChatId } from '@/lib/format'
 import type { ConversationWithRelations, Message, MessageStatus } from '@/lib/types'
 
 const STATUS_ICON: Record<MessageStatus, string> = {
@@ -28,11 +28,13 @@ export default function MessageThread({
   initialMessages,
   members,
   canSend,
+  agentName,
 }: {
   conversation: ConversationWithRelations
   initialMessages: Message[]
   members: TeamMember[]
   canSend: boolean
+  agentName: string
 }) {
   const [messages, setMessages] = useState(initialMessages)
   const [assignedTo, setAssignedTo] = useState(conversation.assigned_to ?? '')
@@ -97,6 +99,20 @@ export default function MessageThread({
 
   const title = conversationTitle(conversation)
   const grouped = groupByDay(messages)
+
+  // Valores con los que se completan las variables de una respuesta rapida.
+  // Memorizado: el compositor lo usa como dependencia.
+  const replyContext = useMemo(
+    () => ({
+      nombre: title,
+      numero: conversation.contacts?.phone
+        ? `+${conversation.contacts.phone}`
+        : phoneFromChatId(conversation.chat_id),
+      cuenta: conversation.whatsapp_accounts?.label ?? '',
+      agente: agentName,
+    }),
+    [agentName, conversation.chat_id, conversation.contacts?.phone, conversation.whatsapp_accounts?.label, title],
+  )
 
   return (
     <section className="thread" aria-label={`Conversacion con ${title}`}>
@@ -172,7 +188,12 @@ export default function MessageThread({
         <div ref={bottomRef} />
       </div>
 
-      <Composer conversationId={conversation.id} orgId={conversation.org_id} disabled={!canSend} />
+      <Composer
+        conversationId={conversation.id}
+        orgId={conversation.org_id}
+        disabled={!canSend}
+        replyContext={replyContext}
+      />
     </section>
   )
 }

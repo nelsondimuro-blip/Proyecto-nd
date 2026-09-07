@@ -65,3 +65,13 @@ export interface Message {
   status: MessageStatus
   sent_at: string
 }
+
+export interface QuickReply {
+  id: string
+  org_id: string
+  shortcut: string
+  title: string | null
+  body: string
+  created_by: string | null
+  usage_count: number
+}

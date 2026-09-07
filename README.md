@@ -35,6 +35,8 @@ tablas de Supabase.
   foto opcional), con estado de entrega (enviado / recibido / leido).
 - **Notas de voz**: se graban desde el navegador y se envian como PTT, igual que en el
   telefono; las recibidas se marcan como tales en el hilo.
+- **Respuestas rapidas**: biblioteca compartida con atajos (`/envio`) y variables
+  (`{{nombre}}`, `{{numero}}`, `{{cuenta}}`, `{{agente}}`) que se completan al insertarlas.
 - **Trabajo en equipo**: invitaciones por correo, roles (propietario / administrador / agente),
   asignacion de conversaciones, estados (abierta / pendiente / cerrada), contador de no leidos
   y filtros.
@@ -129,6 +131,7 @@ WhatsApp  <--websocket-->  gateway (Baileys)  --service role-->  Supabase (Postg
 | `contacts` | Directorio unificado de la organizacion |
 | `conversations` | Un chat por cuenta (individual o grupo) |
 | `messages` | Historial, con direccion, tipo, adjunto y estado de entrega |
+| `quick_replies` | Respuestas guardadas del equipo, con atajo y contador de uso |
 
 ## API del gateway
 
