@@ -1,0 +1,22 @@
+{
+  "name": "proyecto-nd",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Bandeja unificada de WhatsApp para un grupo de negocios",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "npm run dev --workspace apps/web",
+    "dev:gateway": "npm run dev --workspace apps/gateway",
+    "build": "npm run build --workspaces --if-present",
+    "build:schema": "node scripts/build-schema.mjs",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20.11"
+  }
+}
