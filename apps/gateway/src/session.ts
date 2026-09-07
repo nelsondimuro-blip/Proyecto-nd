@@ -1,5 +1,6 @@
 import makeWASocket, {
   DisconnectReason,
+  type AnyMessageContent,
   fetchLatestBaileysVersion,
   jidNormalizedUser,
   makeCacheableSignalKeyStore,
@@ -10,6 +11,7 @@ import { useSupabaseAuthState, type SupabaseAuthState } from './authState'
 import { env } from './env'
 import { logger, waLogger } from './logger'
 import { ingestMessage, phoneFromJid, resolveConversation, updateMessageStatus, type SessionContext } from './ingest'
+import { prepareOutboundMedia, type OutboundMedia } from './outbound'
 import { supabase } from './supabase'
 
 export type AccountStatus = 'disconnected' | 'connecting' | 'qr' | 'connected' | 'logged_out' | 'error'
@@ -275,16 +277,28 @@ export class WhatsAppSession {
     })
   }
 
-  async sendText(input: {
+  /**
+   * Envia un mensaje de texto, un adjunto, o un adjunto con pie de foto.
+   * El adjunto ya vive en el bucket privado: aqui se baja y se reenvia.
+   */
+  async send(input: {
     chatId: string
-    text: string
+    text?: string | null
+    media?: OutboundMedia | null
     sentBy?: string | null
   }): Promise<{ waMessageId: string; conversationId: string }> {
     const sock = this.sock
     if (!sock) throw new Error('La cuenta no esta conectada')
 
+    const text = input.text?.trim() ? input.text : null
+
+    if (!text && !input.media) throw new Error('El mensaje no tiene texto ni adjunto')
+
+    const prepared = input.media ? await prepareOutboundMedia(input.media, text) : null
+    const content: AnyMessageContent = prepared ? prepared.content : { text: text! }
+
     const jid = normalizeChatId(input.chatId)
-    const sent = await sock.sendMessage(jid, { text: input.text })
+    const sent = await sock.sendMessage(jid, content)
     const waMessageId = sent?.key?.id
 
     if (!waMessageId) throw new Error('WhatsApp no devolvio un identificador de mensaje')
@@ -300,8 +314,11 @@ export class WhatsAppSession {
         wa_message_id: waMessageId,
         direction: 'out',
         sender_wa_id: this.context.selfJid() ?? null,
-        type: 'text',
-        body: input.text,
+        type: prepared?.type ?? 'conversation',
+        body: text,
+        media_path: input.media?.path ?? null,
+        media_mime: prepared?.mime ?? null,
+        media_filename: prepared?.filename ?? null,
         status: 'pending',
         sent_by: input.sentBy ?? null,
         sent_at: new Date().toISOString(),

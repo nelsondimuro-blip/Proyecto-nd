@@ -31,7 +31,8 @@ tablas de Supabase.
 - **Chats individuales y de grupo**, con nombre del remitente en los grupos.
 - **Adjuntos** (imagen, video, audio, documentos) guardados en un bucket privado,
   servidos con URLs firmadas de corta duracion.
-- **Envio de texto** desde el panel, con estado de entrega (enviado / recibido / leido).
+- **Envio de texto y adjuntos** desde el panel (imagen, video, audio o documento, con pie de
+  foto opcional), con estado de entrega (enviado / recibido / leido).
 - **Trabajo en equipo**: asignacion de conversaciones, estados (abierta / pendiente / cerrada),
   contador de no leidos y filtros.
 - **Aislamiento por organizacion** con Row Level Security en todas las tablas.
@@ -47,7 +48,7 @@ supabase link --project-ref <ref-del-proyecto>
 supabase db push
 ```
 
-(O pegar el contenido de `supabase/migrations/20260907000000_init.sql` en el SQL Editor.)
+(O pegar en el SQL Editor el contenido de los archivos de `supabase/migrations/`, en orden.)
 
 La migracion crea el esquema, las politicas de RLS, el bucket privado `whatsapp-media`
 y publica las tablas en Realtime.
@@ -103,6 +104,9 @@ WhatsApp  <--websocket-->  gateway (Baileys)  --service role-->  Supabase (Postg
   por Realtime, sin polling.
 - Los **mensajes salientes** se guardan al enviarse; el eco que devuelve WhatsApp no
   duplica gracias a la unicidad `(conversation_id, wa_message_id)`.
+- Los **adjuntos salientes** los sube el navegador directo al bucket, bajo
+  `<org_id>/outbox/<conversation_id>/`, y el gateway los baja para mandarlos: el archivo
+  nunca atraviesa las funciones de Next, asi que no lo limita el tamanio de un request.
 
 ### Modelo de datos
 
@@ -126,7 +130,7 @@ Todas las rutas (salvo `/healthz`) exigen la cabecera `x-gateway-secret`.
 | `POST` | `/accounts/:id/disconnect` | Cierra el socket conservando las credenciales |
 | `POST` | `/accounts/:id/logout` | Desvincula el dispositivo y borra credenciales |
 | `GET` | `/accounts/:id/status` | Estado en base de datos y en memoria |
-| `POST` | `/accounts/:id/messages` | Envia un texto (`chatId`, `text`) |
+| `POST` | `/accounts/:id/messages` | Envia texto y/o adjunto (`chatId`, `text`, `media`) |
 | `POST` | `/accounts/:id/check` | Comprueba si un numero tiene WhatsApp |
 
 ## Despliegue
@@ -142,8 +146,8 @@ Todas las rutas (salvo `/healthz`) exigen la cabecera `x-gateway-secret`.
 
 ## Limitaciones conocidas
 
-- Solo se envian **mensajes de texto** desde el panel; los adjuntos se reciben pero
-  todavia no se envian.
+- El envio de adjuntos acepta hasta 25 MB (`MAX_MEDIA_BYTES`); las notas de voz se
+  mandan como audio comun, no como mensaje de voz (PTT).
 - El historial previo a la vinculacion no se importa (`syncFullHistory` esta desactivado
   para no saturar la base).
 - La gestion de miembros se hace por ahora desde Supabase, no desde la interfaz.

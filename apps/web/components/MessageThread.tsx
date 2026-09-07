@@ -172,7 +172,7 @@ export default function MessageThread({
         <div ref={bottomRef} />
       </div>
 
-      <Composer conversationId={conversation.id} disabled={!canSend} />
+      <Composer conversationId={conversation.id} orgId={conversation.org_id} disabled={!canSend} />
     </section>
   )
 }

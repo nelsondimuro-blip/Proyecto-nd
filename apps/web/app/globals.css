@@ -550,3 +550,31 @@ select {
   border-radius: 16px;
   padding: 28px;
 }
+
+.attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 16px 0;
+  padding: 8px 12px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
+  font-size: 13px;
+}
+
+.attachment-chip img {
+  width: 38px;
+  height: 38px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.attachment-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

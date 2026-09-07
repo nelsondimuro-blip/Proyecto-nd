@@ -145,11 +145,22 @@ app.get(
   }),
 )
 
-const sendSchema = z.object({
-  chatId: z.string().min(5),
-  text: z.string().min(1).max(4096),
-  sentBy: z.string().uuid().nullish(),
-})
+const sendSchema = z
+  .object({
+    chatId: z.string().min(5),
+    text: z.string().max(4096).nullish(),
+    media: z
+      .object({
+        path: z.string().min(3).max(400),
+        mime: z.string().max(150).nullish(),
+        filename: z.string().max(255).nullish(),
+      })
+      .nullish(),
+    sentBy: z.string().uuid().nullish(),
+  })
+  .refine((value) => Boolean(value.text?.trim()) || Boolean(value.media), {
+    message: 'El mensaje necesita texto, un adjunto, o ambos',
+  })
 
 app.post(
   '/accounts/:id/messages',
@@ -161,15 +172,24 @@ app.post(
         return
       }
 
+      // Defensa en profundidad: el adjunto tiene que vivir en la carpeta de
+      // la organizacion duenia de la cuenta.
+      const mediaPath = parsed.data.media?.path
+      if (mediaPath && (!mediaPath.startsWith(`${account.org_id}/`) || mediaPath.includes('..'))) {
+        res.status(403).json({ error: 'el adjunto no pertenece a esta organizacion' })
+        return
+      }
+
       const session = sessionManager.get(account.id)
       if (!session) {
         res.status(409).json({ error: 'la cuenta no esta conectada' })
         return
       }
 
-      const result = await session.sendText({
+      const result = await session.send({
         chatId: parsed.data.chatId,
-        text: parsed.data.text,
+        text: parsed.data.text ?? null,
+        media: parsed.data.media ?? null,
         sentBy: parsed.data.sentBy ?? null,
       })
 
