@@ -1,8 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useVoiceRecorder, type VoiceRecording } from '@/components/useVoiceRecorder'
 import { createClient } from '@/lib/supabase/client'
+import { formatDuration } from '@/lib/recorder'
 import { MAX_UPLOAD_BYTES, formatBytes, outboundPath } from '@/lib/uploads'
+
+interface PendingAttachment {
+  file: File
+  isVoice: boolean
+  seconds: number
+}
 
 export default function Composer({
   conversationId,
@@ -14,7 +22,7 @@ export default function Composer({
   disabled: boolean
 }) {
   const [text, setText] = useState('')
-  const [file, setFile] = useState<File | null>(null)
+  const [attachment, setAttachment] = useState<PendingAttachment | null>(null)
   const [phase, setPhase] = useState<'idle' | 'uploading' | 'sending'>('idle')
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -22,41 +30,51 @@ export default function Composer({
   const supabase = useMemo(() => createClient(), [])
 
   const busy = phase !== 'idle'
-  const preview = useMemo(
-    () => (file && file.type.startsWith('image/') ? URL.createObjectURL(file) : null),
-    [file],
-  )
+  const file = attachment?.file ?? null
+
+  const preview = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
 
   useEffect(() => {
     if (!preview) return
     return () => URL.revokeObjectURL(preview)
   }, [preview])
 
-  const clearFile = () => {
-    setFile(null)
+  const clearAttachment = () => {
+    setAttachment(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const pickFile = (chosen: File | null) => {
+  const acceptFile = (chosen: File | null, meta: { isVoice: boolean; seconds: number }) => {
     setError(null)
 
-    if (chosen && chosen.size > MAX_UPLOAD_BYTES) {
-      setError(`El archivo pesa ${formatBytes(chosen.size)}; el maximo es ${formatBytes(MAX_UPLOAD_BYTES)}.`)
-      clearFile()
+    if (!chosen) {
+      clearAttachment()
       return
     }
 
-    setFile(chosen)
+    if (chosen.size > MAX_UPLOAD_BYTES) {
+      setError(`El archivo pesa ${formatBytes(chosen.size)}; el maximo es ${formatBytes(MAX_UPLOAD_BYTES)}.`)
+      clearAttachment()
+      return
+    }
+
+    setAttachment({ file: chosen, ...meta })
   }
+
+  const recorder = useVoiceRecorder((recording: VoiceRecording) => {
+    // La nota de voz reemplaza cualquier adjunto pendiente: se manda sola.
+    acceptFile(recording.file, { isVoice: true, seconds: recording.seconds })
+  })
 
   const send = async () => {
     const body = text.trim()
+    const isVoice = attachment?.isVoice ?? false
     if ((!body && !file) || busy || disabled) return
 
     setError(null)
 
     try {
-      let media: { path: string; mime: string; filename: string } | undefined
+      let media: { path: string; mime: string; filename: string; voice: boolean } | undefined
 
       if (file) {
         setPhase('uploading')
@@ -70,7 +88,12 @@ export default function Composer({
 
         if (uploadError) throw new Error(`No se pudo subir el archivo: ${uploadError.message}`)
 
-        media = { path, mime: file.type || 'application/octet-stream', filename: file.name }
+        media = {
+          path,
+          mime: file.type || 'application/octet-stream',
+          filename: file.name,
+          voice: isVoice,
+        }
       }
 
       setPhase('sending')
@@ -78,7 +101,8 @@ export default function Composer({
       const response = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ conversationId, text: body || null, media }),
+        // Una nota de voz viaja sola: WhatsApp descarta el pie de texto.
+        body: JSON.stringify({ conversationId, text: isVoice ? null : body || null, media }),
       })
 
       if (!response.ok) {
@@ -86,8 +110,8 @@ export default function Composer({
         throw new Error(payload.error ?? 'No se pudo enviar el mensaje')
       }
 
-      setText('')
-      clearFile()
+      if (!isVoice) setText('')
+      clearAttachment()
       textareaRef.current?.focus()
     } catch (err) {
       setError((err as Error).message)
@@ -98,21 +122,52 @@ export default function Composer({
 
   const buttonLabel =
     phase === 'uploading' ? 'Subiendo...' : phase === 'sending' ? 'Enviando...' : 'Enviar'
+  const voicePending = attachment?.isVoice ?? false
+  const problem = error ?? recorder.error
 
   return (
     <div>
-      {error ? (
+      {problem ? (
         <p className="alert" style={{ margin: '0 16px' }}>
-          {error}
+          {problem}
         </p>
       ) : null}
 
-      {file ? (
+      {recorder.recording ? (
         <div className="attachment-chip">
-          {preview ? <img src={preview} alt="" /> : <span aria-hidden>📎</span>}
-          <span className="attachment-name">{file.name}</span>
-          <span className="muted">{formatBytes(file.size)}</span>
-          <button type="button" className="chip" onClick={clearFile} disabled={busy} aria-label="Quitar adjunto">
+          <span className="recording-dot" aria-hidden />
+          <span className="attachment-name">Grabando nota de voz... {formatDuration(recorder.seconds)}</span>
+          <button type="button" className="chip" onClick={recorder.cancel}>
+            Cancelar
+          </button>
+          <button type="button" className="btn" onClick={recorder.stop}>
+            Listo
+          </button>
+        </div>
+      ) : null}
+
+      {attachment && !recorder.recording ? (
+        <div className="attachment-chip">
+          {voicePending ? (
+            <>
+              <span aria-hidden>🎤</span>
+              <span className="attachment-name">Nota de voz · {formatDuration(attachment.seconds)}</span>
+              {preview ? <audio src={preview} controls style={{ height: 32 }} /> : null}
+            </>
+          ) : (
+            <>
+              {preview && file?.type.startsWith('image/') ? <img src={preview} alt="" /> : <span aria-hidden>📎</span>}
+              <span className="attachment-name">{file?.name}</span>
+              <span className="muted">{file ? formatBytes(file.size) : ''}</span>
+            </>
+          )}
+          <button
+            type="button"
+            className="chip"
+            onClick={clearAttachment}
+            disabled={busy}
+            aria-label="Quitar adjunto"
+          >
             ✕
           </button>
         </div>
@@ -129,7 +184,7 @@ export default function Composer({
           ref={fileInputRef}
           type="file"
           hidden
-          onChange={(event) => pickFile(event.target.files?.[0] ?? null)}
+          onChange={(event) => acceptFile(event.target.files?.[0] ?? null, { isVoice: false, seconds: 0 })}
         />
 
         <button
@@ -137,23 +192,39 @@ export default function Composer({
           className="btn btn-ghost"
           title="Adjuntar archivo"
           aria-label="Adjuntar archivo"
-          disabled={disabled || busy}
+          disabled={disabled || busy || recorder.recording || voicePending}
           onClick={() => fileInputRef.current?.click()}
         >
           📎
         </button>
 
+        {recorder.supported ? (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            title="Grabar nota de voz"
+            aria-label="Grabar nota de voz"
+            data-recording={recorder.recording}
+            disabled={disabled || busy || voicePending}
+            onClick={() => (recorder.recording ? recorder.stop() : void recorder.start())}
+          >
+            🎤
+          </button>
+        ) : null}
+
         <textarea
           ref={textareaRef}
           rows={1}
           value={text}
-          disabled={disabled}
+          disabled={disabled || voicePending}
           placeholder={
             disabled
               ? 'La cuenta de WhatsApp no esta conectada'
-              : file
-                ? 'Agrega un pie de foto (opcional)'
-                : 'Escribe un mensaje'
+              : voicePending
+                ? 'La nota de voz se envia sola'
+                : file
+                  ? 'Agrega un pie de foto (opcional)'
+                  : 'Escribe un mensaje'
           }
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => {
@@ -168,7 +239,7 @@ export default function Composer({
         <button
           className="btn"
           type="submit"
-          disabled={disabled || busy || (text.trim().length === 0 && !file)}
+          disabled={disabled || busy || recorder.recording || (text.trim().length === 0 && !file)}
         >
           {buttonLabel}
         </button>

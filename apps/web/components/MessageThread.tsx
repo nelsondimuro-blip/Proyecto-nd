@@ -184,6 +184,12 @@ function MessageBubble({ message, isGroup }: { message: Message; isGroup: boolea
         <div className="bubble-author">{message.sender_name}</div>
       ) : null}
 
+      {message.is_voice ? (
+        <div className="muted" style={{ fontSize: 12, marginBottom: 2 }}>
+          🎤 Nota de voz
+        </div>
+      ) : null}
+
       {message.media_path ? (
         <MediaAttachment
           path={message.media_path}

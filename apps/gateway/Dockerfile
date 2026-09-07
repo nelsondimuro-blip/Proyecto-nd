@@ -2,6 +2,12 @@
 # (Railway, Fly.io, Render, una VM). No funciona en entornos serverless.
 FROM node:20-slim
 
+# ffmpeg convierte las notas de voz a ogg/opus, el formato que WhatsApp
+# exige para un PTT. Sin el, el resto de la app funciona igual.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Primero los manifiestos, para aprovechar la cache de capas.

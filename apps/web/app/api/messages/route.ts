@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       conversationId?: unknown
       text?: unknown
-      media?: { path?: unknown; mime?: unknown; filename?: unknown } | null
+      media?: { path?: unknown; mime?: unknown; filename?: unknown; voice?: unknown } | null
     }
 
     const conversationId = typeof body.conversationId === 'string' ? body.conversationId : ''
@@ -58,6 +58,7 @@ export async function POST(request: Request) {
                 path: mediaPath,
                 mime: typeof body.media?.mime === 'string' ? body.media.mime : null,
                 filename: typeof body.media?.filename === 'string' ? body.media.filename : null,
+                voice: body.media?.voice === true,
               }
             : null,
           sentBy: ctx.userId,

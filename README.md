@@ -33,6 +33,8 @@ tablas de Supabase.
   servidos con URLs firmadas de corta duracion.
 - **Envio de texto y adjuntos** desde el panel (imagen, video, audio o documento, con pie de
   foto opcional), con estado de entrega (enviado / recibido / leido).
+- **Notas de voz**: se graban desde el navegador y se envian como PTT, igual que en el
+  telefono; las recibidas se marcan como tales en el hilo.
 - **Trabajo en equipo**: asignacion de conversaciones, estados (abierta / pendiente / cerrada),
   contador de no leidos y filtros.
 - **Aislamiento por organizacion** con Row Level Security en todas las tablas.
@@ -67,6 +69,10 @@ cp .env.example .env
 | `GATEWAY_SHARED_SECRET` | web + gateway | `openssl rand -hex 32` |
 
 ### 3. Instalar y levantar
+
+El gateway necesita **ffmpeg** en el host para convertir las notas de voz a ogg/opus
+(`apt install ffmpeg`, `brew install ffmpeg`). El resto de la app funciona sin el; solo
+fallan las notas de voz, con un mensaje que lo dice. La imagen de Docker ya lo incluye.
 
 ```bash
 npm install
@@ -107,6 +113,9 @@ WhatsApp  <--websocket-->  gateway (Baileys)  --service role-->  Supabase (Postg
 - Los **adjuntos salientes** los sube el navegador directo al bucket, bajo
   `<org_id>/outbox/<conversation_id>/`, y el gateway los baja para mandarlos: el archivo
   nunca atraviesa las funciones de Next, asi que no lo limita el tamanio de un request.
+- Las **notas de voz** se graban con `MediaRecorder` (webm/opus en Chrome, mp4 en Safari,
+  ogg/opus en Firefox) y el gateway las normaliza a ogg/opus con ffmpeg antes de mandarlas
+  como PTT. Firefox ya entrega el formato correcto y se envia sin conversion.
 
 ### Modelo de datos
 
@@ -146,8 +155,8 @@ Todas las rutas (salvo `/healthz`) exigen la cabecera `x-gateway-secret`.
 
 ## Limitaciones conocidas
 
-- El envio de adjuntos acepta hasta 25 MB (`MAX_MEDIA_BYTES`); las notas de voz se
-  mandan como audio comun, no como mensaje de voz (PTT).
+- El envio de adjuntos acepta hasta 25 MB (`MAX_MEDIA_BYTES`) y las grabaciones de voz
+  se cortan a 5 minutos.
 - El historial previo a la vinculacion no se importa (`syncFullHistory` esta desactivado
   para no saturar la base).
 - La gestion de miembros se hace por ahora desde Supabase, no desde la interfaz.

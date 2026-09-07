@@ -182,6 +182,8 @@ export async function ingestMessage(ctx: SessionContext, sock: WASocket, msg: WA
 
   const senderJid = fromMe ? ctx.selfJid() ?? null : isGroup ? msg.key.participant ?? null : chatId
 
+  const isVoice = Boolean((msg.message as any)?.audioMessage?.ptt)
+
   const media = MEDIA_TYPES.has(type)
     ? await storeMedia(sock, msg, { orgId: ctx.orgId, accountId: ctx.accountId, messageKey: waMessageId })
     : null
@@ -200,6 +202,7 @@ export async function ingestMessage(ctx: SessionContext, sock: WASocket, msg: WA
       media_path: media?.path ?? null,
       media_mime: media?.mime ?? null,
       media_filename: media?.filename ?? null,
+      is_voice: isVoice,
       status: fromMe ? 'sent' : 'delivered',
       sent_at: timestampToIso(msg.messageTimestamp),
     },

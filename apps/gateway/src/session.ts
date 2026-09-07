@@ -315,10 +315,12 @@ export class WhatsAppSession {
         direction: 'out',
         sender_wa_id: this.context.selfJid() ?? null,
         type: prepared?.type ?? 'conversation',
-        body: text,
+        // Una nota de voz no lleva pie de texto: WhatsApp lo descarta.
+        body: prepared?.isVoice ? null : text,
         media_path: input.media?.path ?? null,
         media_mime: prepared?.mime ?? null,
         media_filename: prepared?.filename ?? null,
+        is_voice: prepared?.isVoice ?? false,
         status: 'pending',
         sent_by: input.sentBy ?? null,
         sent_at: new Date().toISOString(),

@@ -154,6 +154,7 @@ const sendSchema = z
         path: z.string().min(3).max(400),
         mime: z.string().max(150).nullish(),
         filename: z.string().max(255).nullish(),
+        voice: z.boolean().nullish(),
       })
       .nullish(),
     sentBy: z.string().uuid().nullish(),

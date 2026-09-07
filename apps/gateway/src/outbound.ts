@@ -1,4 +1,5 @@
 import type { AnyMessageContent } from '@whiskeysockets/baileys'
+import { PTT_MIME, toVoiceNote } from './audio'
 import { env } from './env'
 import { supabase } from './supabase'
 
@@ -6,6 +7,8 @@ export interface OutboundMedia {
   path: string
   mime?: string | null
   filename?: string | null
+  /** true cuando el agente grabo una nota de voz: se manda como PTT. */
+  voice?: boolean | null
 }
 
 export interface PreparedMedia {
@@ -14,7 +17,10 @@ export interface PreparedMedia {
   type: string
   mime: string
   filename: string | null
+  isVoice: boolean
 }
+
+const OPUS_MIME_RE = /^audio\/ogg\b.*opus/i
 
 /**
  * Baja el adjunto que el navegador subio al bucket privado y arma el contenido
@@ -40,16 +46,43 @@ export async function prepareOutboundMedia(
   const filename = media.filename || media.path.split('/').pop() || null
   const text = caption ?? undefined
 
+  if (media.voice) {
+    // El navegador graba en webm/opus (Chrome) o mp4 (Safari); solo el
+    // ogg/opus que ya viene bien se puede mandar sin pasar por ffmpeg.
+    const ready = OPUS_MIME_RE.test(mime)
+    const { buffer: audio, seconds } = ready ? { buffer, seconds: 0 } : await toVoiceNote(buffer)
+
+    return {
+      content: { audio, mimetype: PTT_MIME, ptt: true, ...(seconds > 0 ? { seconds } : {}) },
+      type: 'audioMessage',
+      mime: PTT_MIME,
+      filename: null,
+      isVoice: true,
+    }
+  }
+
   if (mime.startsWith('image/') && !mime.includes('svg')) {
-    return { content: { image: buffer, mimetype: mime, caption: text }, type: 'imageMessage', mime, filename }
+    return {
+      content: { image: buffer, mimetype: mime, caption: text },
+      type: 'imageMessage',
+      mime,
+      filename,
+      isVoice: false,
+    }
   }
 
   if (mime.startsWith('video/')) {
-    return { content: { video: buffer, mimetype: mime, caption: text }, type: 'videoMessage', mime, filename }
+    return {
+      content: { video: buffer, mimetype: mime, caption: text },
+      type: 'videoMessage',
+      mime,
+      filename,
+      isVoice: false,
+    }
   }
 
   if (mime.startsWith('audio/')) {
-    return { content: { audio: buffer, mimetype: mime }, type: 'audioMessage', mime, filename }
+    return { content: { audio: buffer, mimetype: mime }, type: 'audioMessage', mime, filename, isVoice: false }
   }
 
   return {
@@ -62,5 +95,6 @@ export async function prepareOutboundMedia(
     type: 'documentMessage',
     mime,
     filename,
+    isVoice: false,
   }
 }

@@ -61,6 +61,7 @@ export interface Message {
   media_path: string | null
   media_mime: string | null
   media_filename: string | null
+  is_voice: boolean
   status: MessageStatus
   sent_at: string
 }
