@@ -46,19 +46,21 @@ tablas de Supabase.
 
 ## Puesta en marcha
 
-> ¿Solo queres probarla? [`docs/PROBAR-LOCAL.md`](docs/PROBAR-LOCAL.md) es la version
-> paso a paso, con los errores tipicos y como resolverlos.
+> ¿Solo queres probarla? [`docs/PROBAR-LOCAL.md`](docs/PROBAR-LOCAL.md) tiene el paso a
+> paso, incluido el camino por GitHub Codespaces (sin instalar nada) y los errores
+> tipicos con su solucion.
 
 ### 1. Base de datos (Supabase)
 
-Crear un proyecto en [supabase.com](https://supabase.com) y aplicar la migracion:
+Crear un proyecto en [supabase.com](https://supabase.com) y aplicar el esquema:
 
 ```bash
 supabase link --project-ref <ref-del-proyecto>
 supabase db push
 ```
 
-(O pegar en el SQL Editor el contenido de los archivos de `supabase/migrations/`, en orden.)
+Para una base nueva alcanza con pegar `supabase/schema.sql` en el SQL Editor: es la
+union de todas las migraciones, y se regenera con `npm run build:schema`.
 
 La migracion crea el esquema, las politicas de RLS, el bucket privado `whatsapp-media`
 y publica las tablas en Realtime.
@@ -66,8 +68,11 @@ y publica las tablas en Realtime.
 ### 2. Variables de entorno
 
 ```bash
-cp .env.example .env
+npm run setup
 ```
+
+Pide los tres datos de Supabase, genera el secreto del gateway y escribe el `.env`.
+(Tambien se puede hacer a mano con `cp .env.example .env`.)
 
 | Variable | Donde se usa | Notas |
 | --- | --- | --- |
@@ -84,9 +89,11 @@ fallan las notas de voz, con un mensaje que lo dice. La imagen de Docker ya lo i
 
 ```bash
 npm install
-npm run dev:gateway   # http://localhost:8080
-npm run dev:web       # http://localhost:3000
+npm run dev           # levanta el gateway y la web juntos
 ```
+
+Tambien se pueden correr por separado con `npm run dev:gateway` (puerto 8080) y
+`npm run dev:web` (puerto 3000).
 
 ### 4. Primer uso
 
