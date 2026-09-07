@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation'
 import MessageThread, { type TeamMember } from '@/components/MessageThread'
 import { requireMembership } from '@/lib/auth'
-import type { ConversationWithRelations, Message } from '@/lib/types'
+import { CONVERSATION_DETAIL_SELECT, withLabels } from '@/lib/labels'
+import type { ConversationWithRelations, Label, Message } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,14 +18,14 @@ export default async function ConversationPage({
 
   const { data: conversation } = await supabase
     .from('conversations')
-    .select('*, whatsapp_accounts(id, label, phone_number, status), contacts(id, display_name, phone)')
+    .select(CONVERSATION_DETAIL_SELECT)
     .eq('id', conversationId)
     .eq('org_id', membership.org_id)
     .maybeSingle()
 
   if (!conversation) notFound()
 
-  const [{ data: messages }, { data: members }] = await Promise.all([
+  const [{ data: messages }, { data: members }, { data: labels }] = await Promise.all([
     supabase
       .from('messages')
       .select('*')
@@ -32,6 +33,11 @@ export default async function ConversationPage({
       .order('sent_at', { ascending: false })
       .limit(MESSAGE_PAGE_SIZE),
     supabase.from('org_members').select('user_id, profiles(email, full_name)').eq('org_id', membership.org_id),
+    supabase
+      .from('labels')
+      .select('id, org_id, name, color, created_by')
+      .eq('org_id', membership.org_id)
+      .order('name', { ascending: true }),
   ])
 
   const team: TeamMember[] = (members ?? []).map((member: any) => {
@@ -49,11 +55,12 @@ export default async function ConversationPage({
 
   return (
     <MessageThread
-      conversation={conversation as unknown as ConversationWithRelations}
+      conversation={withLabels(conversation) as unknown as ConversationWithRelations}
       initialMessages={ordered}
       members={team}
       canSend={account?.status === 'connected'}
       agentName={agentName}
+      allLabels={(labels ?? []) as Label[]}
     />
   )
 }

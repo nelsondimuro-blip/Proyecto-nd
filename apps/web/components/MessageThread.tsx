@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Composer from '@/components/Composer'
+import LabelPicker from '@/components/LabelPicker'
 import MediaAttachment from '@/components/MediaAttachment'
 import { createClient } from '@/lib/supabase/client'
 import { conversationTitle, formatTime, initials, phoneFromChatId } from '@/lib/format'
-import type { ConversationWithRelations, Message, MessageStatus } from '@/lib/types'
+import type { ConversationWithRelations, Label, Message, MessageStatus } from '@/lib/types'
 
 const STATUS_ICON: Record<MessageStatus, string> = {
   pending: '🕐',
@@ -29,16 +30,20 @@ export default function MessageThread({
   members,
   canSend,
   agentName,
+  allLabels,
 }: {
   conversation: ConversationWithRelations
   initialMessages: Message[]
   members: TeamMember[]
   canSend: boolean
   agentName: string
+  allLabels: Label[]
 }) {
   const [messages, setMessages] = useState(initialMessages)
   const [assignedTo, setAssignedTo] = useState(conversation.assigned_to ?? '')
   const [status, setStatus] = useState(conversation.status)
+  const [labels, setLabels] = useState<Label[]>(conversation.labels)
+  const [catalog, setCatalog] = useState<Label[]>(allLabels)
   const bottomRef = useRef<HTMLDivElement>(null)
   const supabase = useMemo(() => createClient(), [])
 
@@ -50,7 +55,10 @@ export default function MessageThread({
     setMessages(initialMessages)
     setAssignedTo(conversation.assigned_to ?? '')
     setStatus(conversation.status)
-  }, [conversation.assigned_to, conversation.id, conversation.status, initialMessages])
+    setLabels(conversation.labels)
+  }, [conversation.assigned_to, conversation.id, conversation.labels, conversation.status, initialMessages])
+
+  useEffect(() => setCatalog(allLabels), [allLabels])
 
   useEffect(() => {
     markRead()
@@ -169,6 +177,19 @@ export default function MessageThread({
           <option value="closed">Cerrada</option>
         </select>
       </header>
+
+      <div className="thread-labels">
+        <LabelPicker
+          conversationId={conversation.id}
+          orgId={conversation.org_id}
+          labels={labels}
+          allLabels={catalog}
+          onChange={(next, nextCatalog) => {
+            setLabels(next)
+            if (nextCatalog) setCatalog(nextCatalog)
+          }}
+        />
+      </div>
 
       <div className="thread-messages">
         {messages.length === 0 ? (

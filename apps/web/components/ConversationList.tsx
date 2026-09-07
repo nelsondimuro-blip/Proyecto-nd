@@ -5,10 +5,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { conversationTitle, formatListTimestamp, initials } from '@/lib/format'
-import type { ConversationWithRelations } from '@/lib/types'
-
-const SELECT =
-  '*, whatsapp_accounts(id, label, phone_number), contacts(id, display_name, phone)'
+import { CONVERSATION_SELECT, chipStyle, withLabels } from '@/lib/labels'
+import type { ConversationWithRelations, Label } from '@/lib/types'
 
 type Filter = 'todas' | 'no_leidas' | 'mias'
 
@@ -16,13 +14,16 @@ export default function ConversationList({
   initialConversations,
   orgId,
   userId,
+  labels,
 }: {
   initialConversations: ConversationWithRelations[]
   orgId: string
   userId: string
+  labels: Label[]
 }) {
   const [conversations, setConversations] = useState(initialConversations)
   const [filter, setFilter] = useState<Filter>('todas')
+  const [labelFilter, setLabelFilter] = useState('')
   const [query, setQuery] = useState('')
   const pathname = usePathname()
   const supabase = useMemo(() => createClient(), [])
@@ -30,12 +31,12 @@ export default function ConversationList({
   const refresh = useCallback(async () => {
     const { data } = await supabase
       .from('conversations')
-      .select(SELECT)
+      .select(CONVERSATION_SELECT)
       .eq('org_id', orgId)
       .order('last_message_at', { ascending: false, nullsFirst: false })
       .limit(200)
 
-    if (data) setConversations(data as unknown as ConversationWithRelations[])
+    if (data) setConversations(data.map(withLabels) as unknown as ConversationWithRelations[])
   }, [orgId, supabase])
 
   // Realtime: cualquier cambio en las conversaciones de la organizacion
@@ -46,6 +47,14 @@ export default function ConversationList({
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'conversations', filter: `org_id=eq.${orgId}` },
+        () => {
+          void refresh()
+        },
+      )
+      // Etiquetar no toca la fila de la conversacion: hay que escuchar aparte.
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'conversation_labels', filter: `org_id=eq.${orgId}` },
         () => {
           void refresh()
         },
@@ -63,6 +72,7 @@ export default function ConversationList({
     return conversations.filter((conversation) => {
       if (filter === 'no_leidas' && conversation.unread_count === 0) return false
       if (filter === 'mias' && conversation.assigned_to !== userId) return false
+      if (labelFilter && !conversation.labels.some((label) => label.id === labelFilter)) return false
       if (!needle) return true
 
       const haystack = [
@@ -70,13 +80,14 @@ export default function ConversationList({
         conversation.chat_id,
         conversation.last_message_preview ?? '',
         conversation.whatsapp_accounts?.label ?? '',
+        conversation.labels.map((label) => label.name).join(' '),
       ]
         .join(' ')
         .toLowerCase()
 
       return haystack.includes(needle)
     })
-  }, [conversations, filter, query, userId])
+  }, [conversations, filter, labelFilter, query, userId])
 
   return (
     <section className="conversation-panel" aria-label="Conversaciones">
@@ -115,6 +126,23 @@ export default function ConversationList({
             {label}
           </button>
         ))}
+
+        {labels.length > 0 ? (
+          <select
+            className="chip"
+            aria-label="Filtrar por etiqueta"
+            value={labelFilter}
+            data-active={Boolean(labelFilter)}
+            onChange={(event) => setLabelFilter(event.target.value)}
+          >
+            <option value="">Toda etiqueta</option>
+            {labels.map((label) => (
+              <option key={label.id} value={label.id}>
+                {label.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
       </div>
 
       <div className="panel-body">
@@ -142,6 +170,20 @@ export default function ConversationList({
                   <span className="conversation-preview">
                     {conversation.last_message_preview ?? 'Sin mensajes todavia'}
                   </span>
+                  {conversation.labels.length > 0 ? (
+                    <span className="conversation-labels">
+                      {conversation.labels.slice(0, 3).map((label) => (
+                        <span key={label.id} className="label-chip is-static" style={chipStyle(label.color)}>
+                          {label.name}
+                        </span>
+                      ))}
+                      {conversation.labels.length > 3 ? (
+                        <span className="muted" style={{ fontSize: 11 }}>
+                          +{conversation.labels.length - 3}
+                        </span>
+                      ) : null}
+                    </span>
+                  ) : null}
                 </span>
 
                 <span className="conversation-meta">

@@ -43,9 +43,19 @@ export interface Conversation {
   last_message_preview: string | null
 }
 
+export interface Label {
+  id: string
+  org_id: string
+  name: string
+  color: string
+  created_by: string | null
+}
+
 export interface ConversationWithRelations extends Conversation {
   whatsapp_accounts: Pick<WhatsAppAccount, 'id' | 'label' | 'phone_number'> | null
   contacts: { id: string; display_name: string | null; phone: string | null } | null
+  /** Derivado de conversation_labels al leer; no es una columna. */
+  labels: Label[]
 }
 
 export interface Message {
