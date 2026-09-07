@@ -46,6 +46,9 @@ tablas de Supabase.
 
 ## Puesta en marcha
 
+> ¿Solo queres probarla? [`docs/PROBAR-LOCAL.md`](docs/PROBAR-LOCAL.md) es la version
+> paso a paso, con los errores tipicos y como resolverlos.
+
 ### 1. Base de datos (Supabase)
 
 Crear un proyecto en [supabase.com](https://supabase.com) y aplicar la migracion:
